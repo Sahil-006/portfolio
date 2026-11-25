@@ -1,75 +1,15 @@
 import Link from "next/link";
-import Image from "next/image";
 import { site } from "@/data/site";
 import { projects } from "@/data/projects";
-import EcgTrace from "@/components/EcgTrace";
+import Hero from "@/components/latent/Hero";
 import Section from "@/components/Section";
-import LinkButton from "@/components/LinkButton";
 import ProjectCover from "@/components/ProjectCover";
 import GithubGraph from "@/components/GithubGraph";
 
 export default function Home() {
-  const socials = [
-    { label: "GitHub", href: site.links.github },
-    { label: "LinkedIn", href: site.links.linkedin },
-    { label: "X", href: site.links.x },
-    { label: "Email", href: site.links.email ? `mailto:${site.links.email}` : "" },
-  ].filter((s) => s.href);
-
   return (
     <>
-      {/* Hero */}
-      <section className="pt-10 sm:pt-16">
-        <EcgTrace />
-
-        <div className="mt-8 flex items-center gap-4">
-          {site.photo ? (
-            <Image
-              src={site.photo}
-              alt={site.name}
-              width={56}
-              height={56}
-              className="h-14 w-14 rounded-full border border-rule object-cover"
-              priority
-            />
-          ) : (
-            <div
-              aria-hidden
-              className="grid h-14 w-14 place-items-center rounded-full border border-rule bg-panel font-display text-lg font-semibold text-ink"
-            >
-              {site.initials}
-            </div>
-          )}
-          {site.status && (
-            <p className="flex items-center gap-2 text-sm text-dim">
-              <span className="h-2 w-2 rounded-full bg-amber" aria-hidden />
-              {site.status}
-            </p>
-          )}
-        </div>
-
-        <h1
-          className="mt-6 text-[clamp(3rem,12vw,5.75rem)] font-bold leading-[0.92] tracking-[-0.035em] text-ink"
-          style={{ fontVariationSettings: '"wdth" 80' }}
-        >
-          {site.name}
-        </h1>
-        <p className="mt-5 text-lg text-ink sm:text-xl">{site.title}</p>
-        <p className="mt-2 max-w-[34ch] text-lg leading-relaxed text-dim sm:text-xl">{site.tagline}</p>
-
-        <div className="mt-8 flex flex-wrap gap-2">
-          {site.resumes.map((r, i) => (
-            <LinkButton key={r.href} href={r.href} primary={i === 0}>
-              {r.label}
-            </LinkButton>
-          ))}
-          {socials.map((s) => (
-            <LinkButton key={s.label} href={s.href}>
-              {s.label}
-            </LinkButton>
-          ))}
-        </div>
-      </section>
+      <Hero />
 
       <Section title="About" id="about">
         <div className="max-w-[65ch] space-y-4 leading-relaxed text-dim">
@@ -134,7 +74,7 @@ export default function Home() {
               <dt className="mb-2 text-sm text-dim">{g.group}</dt>
               <dd className="flex flex-wrap gap-1.5">
                 {g.items.map((item) => (
-                  <span key={item} className="rounded-md border border-rule px-2 py-1 text-sm text-ink">
+                  <span key={item} className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1 text-sm text-ink">
                     {item}
                   </span>
                 ))}

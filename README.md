@@ -1,6 +1,8 @@
 # Sahil Shaikh — Portfolio
 
-Next.js 16 + Tailwind CSS 4 + Framer Motion. Three pages: Home, Projects, Favourites. Press ⌘K / Ctrl+K anywhere to search.
+Next.js 16 + Tailwind CSS 4 + Framer Motion + React Three Fiber. Three pages: Home, Projects, Favourites. Press ⌘K / Ctrl+K anywhere to search.
+
+The home page opens on a 3D "latent space": each project is a glass orb, and the skills it uses (its `tags`) orbit it. Skills shared by several projects sit between them. Visitors can drag to rotate it, hover over an orb to light up its cluster, and click one to open a project card. The 3D scene builds itself from `data/projects.ts`, so adding a project or tag adds an orb automatically. To change a project's colour, edit its `hue`.
 
 ## Edit your content
 
@@ -9,7 +11,7 @@ Everything you'll want to change is in the `data/` folder. You don't need to tou
 | File | What's in it |
 | --- | --- |
 | `data/site.ts` | Name, title, bio, links, status line, stack, experience, education, "On repeat" song |
-| `data/projects.ts` | Projects, in display order (the first 3 appear on the home page) |
+| `data/projects.ts` | Projects, in display order (the first 3 appear on the home page). Up to 7 projects get a place in the 3D space. |
 | `data/favourites.ts` | Movies and series (**replace the placeholders before you deploy**) |
 
 Images go in `public/`:
@@ -49,6 +51,21 @@ Open http://localhost:3000. Changes show up as soon as you save a file.
 ### Use your own domain
 In Vercel: **Project → Settings → Domains → Add**, type your domain, and add the DNS records Vercel shows you at your domain registrar. Then set `url` in `data/site.ts` to your domain and push again.
 
+## Updating an existing deployment
+
+If the site is already on GitHub and Vercel, replace the project files with this version (keep your `.git` folder), then run:
+
+```bash
+npm install
+git add -A
+git commit -m "3D latent-space redesign"
+git push
+```
+
+Vercel redeploys automatically after the push.
+
 ## Notes
+- The 3D scene picks a quality level for each visitor. Desktops get real glass refraction and bloom. Phones and weaker machines get a lighter look with the same layout, and any device switches to it automatically if its frame rate drops. Rendering also pauses when the hero is scrolled out of view or the tab is hidden.
+- The 3D scene is loaded only in the browser, after the page itself has loaded. On devices without WebGL, visitors see soft colour glows and the rest of the page works as normal. If a visitor has "reduce motion" turned on, the scene stops rotating and floating.
 - The GitHub graph loads live from a public contributions API in the visitor's browser. If that API is down, the section shows a link to your GitHub profile instead.
 - Your resumes include your phone number. Since they're public on the site, remove it from the PDFs if you'd rather not share it.

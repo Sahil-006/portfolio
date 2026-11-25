@@ -45,7 +45,7 @@ export default function ProjectsPage() {
                 </ul>
                 <ul className="mt-5 flex flex-wrap gap-1.5" aria-label="Built with">
                   {p.tags.map((t) => (
-                    <li key={t} className="rounded-md bg-panel px-2 py-1 text-xs text-dim">
+                    <li key={t} className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1 text-xs text-dim">
                       {t}
                     </li>
                   ))}

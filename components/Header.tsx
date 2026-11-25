@@ -16,8 +16,8 @@ export default function Header() {
   const palette = useCommandPalette();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-rule/70 bg-ground/80 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-3xl items-center justify-between gap-4 px-5 sm:px-8">
+    <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-ground/60 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
         <Link
           href="/"
           aria-label={`${site.name}, home`}

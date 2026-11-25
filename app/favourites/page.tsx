@@ -23,7 +23,7 @@ export default function FavouritesPage() {
           <ul className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {group.items.map((item, i) => (
               <li key={item.title + i}>
-                <div className="relative aspect-[2/3] overflow-hidden rounded-lg border border-rule bg-panel">
+                <div className="glass relative aspect-[2/3] overflow-hidden rounded-xl">
                   {item.poster ? (
                     <Image
                       src={item.poster}
