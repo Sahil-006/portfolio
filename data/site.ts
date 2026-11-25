@@ -7,7 +7,7 @@ export const site = {
   name: "Sahil Shaikh",
   initials: "SS",
   title: "AI Engineer",
-  tagline: "I build models people can trust, and the backends that ship them.",
+  tagline: "I build models people can trust, and I’m honest about the ones that broke.",
   location: "Petlad, Gujarat, India",
   // Short line shown next to the green dot in the hero. "" to hide.
   status: "Open to AI/ML and backend roles",
@@ -62,6 +62,27 @@ export const site = {
     {
       group: "Languages",
       items: ["Python", "C++", "Java", "JavaScript", "TypeScript"],
+    },
+  ],
+
+  // "Things I broke (and fixed)" on the home page. Real stories, told plainly.
+  // Add your own: a bug, a bad deploy, a wrong assumption, and what you did about it.
+  brokeAndFixed: [
+    {
+      project: "AI-NIDS",
+      broke: "My intrusion detector scored 99.9994%. On traffic from a different source, it scored 0.24%.",
+      fixed:
+        "It had learned shortcuts specific to one dataset, not what attacks look like. I added protocol rules alongside LightGBM and grew the attack patterns from 3 to 31.",
+    },
+    {
+      project: "Early Spark",
+      broke: "The model worked on clinical ECG data, then struggled on recordings from our own hardware.",
+      fixed: "Domain shift. I retrained with healthy recordings from the device and reached 90.3% Normal accuracy on held-out data.",
+    },
+    {
+      project: "CodeTrust AI",
+      broke: "The LLM's automatic fixes sometimes wrapped code in security helpers that didn't exist.",
+      fixed: "I added a rule-based check that catches made-up security wrappers before a fix is shown.",
     },
   ],
 

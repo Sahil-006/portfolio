@@ -1,16 +1,16 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { site } from "@/data/site";
 import { projects } from "@/data/projects";
 import LinkButton from "@/components/LinkButton";
-import { buildSpace } from "./layout";
+import ProjectPanel from "@/components/ProjectPanel";
+import CopyEmail from "@/components/CopyEmail";
 
-const LatentSpace = dynamic(() => import("./LatentSpace"), { ssr: false });
+const Device = dynamic(() => import("./Device"), { ssr: false });
 
 function useMedia(query: string) {
   const [match, setMatch] = useState(false);
@@ -33,17 +33,28 @@ function hasWebGL() {
   }
 }
 
+// Last 7 days of GitHub activity for the LED strip. Falls back to a gentle pattern if the API is down.
+function useActivity(username: string) {
+  const [levels, setLevels] = useState<number[]>([1, 2, 1, 3, 2, 4, 2]);
+  useEffect(() => {
+    fetch(`https://github-contributions-api.jogruber.de/v4/${username}?y=last`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((j: { contributions: { level: number }[] }) => setLevels(j.contributions.slice(-7).map((d) => d.level)))
+      .catch(() => {});
+  }, [username]);
+  return levels;
+}
+
 export default function Hero() {
   const [selected, setSelected] = useState<string | null>(null);
   const [webgl, setWebgl] = useState<boolean | null>(null);
+  const [bubble, setBubble] = useState<"oops" | "fixed" | null>(null);
+  const bubbleTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const compact = !useMedia("(min-width: 768px)");
   const reducedMotion = useMedia("(prefers-reduced-motion: reduce)");
+  const activity = useActivity(site.githubUsername);
   const project = projects.find((p) => p.slug === selected) ?? null;
-  const { projectNodes, skillNodes } = useMemo(buildSpace, []);
   const labels = useRef<Record<string, HTMLElement | null>>({});
-  const setLabel = (id: string) => (el: HTMLElement | null) => {
-    labels.current[id] = el;
-  };
 
   useEffect(() => setWebgl(hasWebGL()), []);
   useEffect(() => {
@@ -52,77 +63,94 @@ export default function Hero() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const onPoke = (phase: "oops" | "fixed") => {
+    setBubble(phase);
+    clearTimeout(bubbleTimer.current);
+    if (phase === "fixed") bubbleTimer.current = setTimeout(() => setBubble(null), 1400);
+  };
+
   const socials = [
     { label: "GitHub", href: site.links.github },
     { label: "LinkedIn", href: site.links.linkedin },
     { label: "X", href: site.links.x },
-    { label: "Email", href: site.links.email ? `mailto:${site.links.email}` : "" },
   ].filter((s) => s.href);
 
   return (
     <section className="relative ml-[calc(50%-50vw)] w-screen" aria-label="Introduction">
-      {/* 3D space */}
-      <div className="relative h-[46vh] min-h-[340px] md:absolute md:inset-0 md:h-auto">
-        {/* Soft colour glows behind the canvas: visible while it loads and if WebGL is unavailable. */}
+      <div className="relative h-[50vh] min-h-[380px] md:absolute md:inset-0 md:h-auto">
+        {/* Soft backlight behind the device, visible while it loads and without WebGL. */}
         <div
           aria-hidden
           className="absolute inset-0"
           style={{
-            background: projects
-              .slice(0, 5)
-              .map(
-                (p, i) =>
-                  `radial-gradient(28% 34% at ${[62, 48, 78, 84, 68][i]}% ${[38, 66, 30, 66, 20][i]}%, ${p.hue}1f, transparent 70%)`,
-              )
-              .join(","),
+            background:
+              "radial-gradient(34% 46% at var(--dx) 48%, rgb(138 180 255 / 0.10), transparent 70%), radial-gradient(22% 30% at var(--dx) 70%, rgb(111 214 194 / 0.07), transparent 70%)",
+            ["--dx" as string]: compact ? "50%" : "66%",
           }}
         />
         {webgl && (
           <div
             className="absolute inset-0"
             role="img"
-            aria-label="Interactive 3D map of Sahil's projects as glass orbs, with the skills each one uses clustered around it"
+            aria-label="A see-through handheld device. Each chip on its circuit board is one of Sahil's projects."
           >
-            <LatentSpace
+            <Device
               selected={selected}
               onSelect={setSelected}
               reducedMotion={reducedMotion}
               compact={compact}
+              activity={activity}
               labels={labels}
+              onPoke={onPoke}
             />
-            {/* Orb labels, positioned every frame by the 3D scene. */}
             <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-              {projectNodes.map((n) => (
+              {projects.slice(0, 5).map((p) => (
                 <span
-                  key={n.id}
-                  ref={setLabel(n.id)}
-                  className="absolute left-0 top-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[13px] font-medium opacity-0 transition-opacity duration-300"
-                  style={{ color: n.hue, background: "rgb(15 19 26 / 0.6)", border: `1px solid ${n.hue}40` }}
+                  key={p.slug}
+                  ref={(el) => {
+                    labels.current[p.slug] = el;
+                  }}
+                  className="absolute left-0 top-0 whitespace-nowrap rounded-full bg-ground/85 px-2.5 py-1 text-xs font-medium opacity-0 transition-opacity duration-200"
+                  style={{ color: p.hue, border: `1px solid ${p.hue}55` }}
                 >
-                  {n.label}
-                </span>
-              ))}
-              {skillNodes.map((n) => (
-                <span
-                  key={n.id}
-                  ref={setLabel(n.id)}
-                  className="absolute left-0 top-0 whitespace-nowrap rounded-md bg-ground/80 px-2 py-0.5 text-xs text-ink opacity-0 transition-opacity duration-200"
-                >
-                  {n.label}
+                  {p.name}
                 </span>
               ))}
             </div>
           </div>
         )}
-        <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-ground to-transparent" />
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-ground to-transparent" />
 
         {webgl && (
-          <p className="pointer-events-none absolute right-5 top-4 text-xs text-dim sm:right-8 md:top-6">
-            {compact ? "Drag to look around. Tap an orb." : "Drag to look around. Click an orb to open its project."}
+          <p className="pointer-events-none absolute right-5 top-5 max-w-[22ch] text-right text-xs leading-relaxed text-dim sm:right-8 md:max-w-none">
+            {compact
+              ? "Drag to turn. Tap a chip, or poke the case."
+              : "Drag to turn it. Click a chip to open a project. Poke the case and see what happens."}
           </p>
         )}
 
-        {/* Project panel (desktop) */}
+        {/* "oops" / "fixed" bubble */}
+        <AnimatePresence>
+          {bubble && (
+            <motion.p
+              key={bubble}
+              initial={{ opacity: 0, y: 6, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="pointer-events-none absolute left-1/2 top-[14%] z-10 -translate-x-1/2 rounded-full px-4 py-1.5 font-display text-lg font-semibold md:left-[66%]"
+              style={{
+                background: bubble === "oops" ? "#ffe98f" : "rgb(111 214 194 / 0.15)",
+                color: bubble === "oops" ? "#2b2a33" : "var(--color-signal)",
+                border: bubble === "oops" ? "none" : "1px solid rgb(111 214 194 / 0.4)",
+              }}
+              role="status"
+            >
+              {bubble === "oops" ? "oops." : "fixed."}
+            </motion.p>
+          )}
+        </AnimatePresence>
+
         <AnimatePresence>
           {project && !compact && (
             <motion.aside
@@ -131,7 +159,7 @@ export default function Hero() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
               transition={{ duration: 0.25 }}
-              className="glass absolute bottom-16 right-8 z-10 w-[340px] rounded-2xl !bg-[#141a24]/90 p-5"
+              className="glass absolute bottom-20 right-8 z-10 w-[340px] rounded-2xl !bg-[#141a24]/90 p-5"
               aria-live="polite"
             >
               <ProjectPanel project={project} onClose={() => setSelected(null)} />
@@ -140,7 +168,6 @@ export default function Hero() {
         </AnimatePresence>
       </div>
 
-      {/* Project panel (mobile) */}
       <AnimatePresence>
         {project && compact && (
           <motion.aside
@@ -149,7 +176,7 @@ export default function Hero() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="glass relative z-10 mx-5 -mt-10 rounded-2xl !bg-[#141a24]/90 p-5"
+            className="glass relative z-10 mx-5 -mt-8 rounded-2xl !bg-[#141a24]/90 p-5"
             aria-live="polite"
           >
             <ProjectPanel project={project} onClose={() => setSelected(null)} />
@@ -157,9 +184,8 @@ export default function Hero() {
         )}
       </AnimatePresence>
 
-      {/* Intro text: overlaid on desktop, below the canvas on mobile */}
-      <div className="pointer-events-none relative md:flex md:h-[min(88vh,820px)] md:items-end">
-        <div className="mx-auto w-full max-w-6xl px-5 pb-4 pt-8 sm:px-8 md:pb-20 md:pt-0">
+      <div className="pointer-events-none relative md:flex md:h-[min(92vh,860px)] md:items-center">
+        <div className="mx-auto w-full max-w-6xl px-5 pb-4 pt-2 sm:px-8 md:pt-0">
           <div className="max-w-md">
             <div className="flex items-center gap-3">
               {site.photo ? (
@@ -186,10 +212,11 @@ export default function Hero() {
               {site.name}
             </h1>
             <p className="mt-4 text-lg text-ink sm:text-xl">{site.title}</p>
-            <p className="mt-1.5 max-w-[34ch] text-lg leading-relaxed text-dim">{site.tagline}</p>
+            <p className="mt-1.5 max-w-[36ch] text-lg leading-relaxed text-dim">{site.tagline}</p>
             <div className="pointer-events-auto mt-7 flex flex-wrap gap-2">
-              {site.resumes.map((r, i) => (
-                <LinkButton key={r.href} href={r.href} primary={i === 0}>
+              <CopyEmail primary />
+              {site.resumes.map((r) => (
+                <LinkButton key={r.href} href={r.href}>
                   {r.label}
                 </LinkButton>
               ))}
@@ -203,44 +230,5 @@ export default function Hero() {
         </div>
       </div>
     </section>
-  );
-}
-
-function ProjectPanel({ project, onClose }: { project: (typeof projects)[number]; onClose: () => void }) {
-  return (
-    <>
-      <div className="flex items-start justify-between gap-3">
-        <h2 className="text-xl font-semibold tracking-tight" style={{ color: project.hue }}>
-          {project.name}
-        </h2>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close project"
-          className="-mr-1 -mt-1 rounded-md p-1 text-dim hover:text-ink"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-            <path d="M6 6l12 12M18 6 6 18" />
-          </svg>
-        </button>
-      </div>
-      <p
-        className="mt-3 font-display text-3xl font-semibold leading-none tracking-tight text-ink"
-        style={{ fontVariationSettings: '"wdth" 82' }}
-      >
-        {project.metric}
-      </p>
-      <p className="mt-1.5 text-sm leading-snug text-dim">{project.metricLabel}</p>
-      <p className="mt-4 text-sm leading-relaxed text-ink/85">{project.summary}</p>
-      <div className="mt-5 flex flex-wrap gap-2">
-        <Link
-          href={`/projects#${project.slug}`}
-          className="inline-flex items-center rounded-md border border-signal/40 bg-signal/10 px-3 py-1.5 text-sm text-signal hover:bg-signal/20"
-        >
-          Read the details
-        </Link>
-        {project.links.live && <LinkButton href={project.links.live}>Live demo</LinkButton>}
-      </div>
-    </>
   );
 }

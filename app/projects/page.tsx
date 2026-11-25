@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Projects" };
 
 export default function ProjectsPage() {
   return (
-    <div className="pt-12 sm:pt-16">
+    <div className="mx-auto max-w-5xl pt-16 sm:pt-24">
       <h1
         className="text-[clamp(2.5rem,8vw,4rem)] font-bold leading-none tracking-[-0.03em]"
         style={{ fontVariationSettings: '"wdth" 80' }}
@@ -23,20 +23,26 @@ export default function ProjectsPage() {
           const links = [
             { label: "Live demo", href: p.links.live },
             { label: "Demo video", href: p.links.demo },
-            { label: "GitHub", href: p.links.github },
+            { label: p.team ? "GitHub (team repo)" : "GitHub", href: p.links.github },
           ].filter((l): l is { label: string; href: string } => Boolean(l.href));
 
           return (
             <article
               key={p.slug}
               id={p.slug}
-              className="grid scroll-mt-24 gap-6 py-10 first:pt-0 md:grid-cols-[260px_1fr] md:gap-8"
+              className="grid scroll-mt-24 gap-6 py-10 first:pt-0 md:grid-cols-[300px_1fr] md:gap-10"
             >
               <div className="md:sticky md:top-24 md:self-start">
                 <ProjectCover project={p} />
               </div>
               <div>
                 <h2 className="text-2xl font-semibold tracking-tight text-ink">{p.name}</h2>
+                {p.team && (
+                  <p className="mt-1.5 inline-flex items-center gap-2 rounded-full border border-white/10 px-2.5 py-0.5 text-xs text-dim">
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: p.hue }} aria-hidden />
+                    {p.team}
+                  </p>
+                )}
                 <p className="mt-2 leading-relaxed text-ink/90">{p.summary}</p>
                 <ul className="mt-4 list-disc space-y-1.5 pl-5 leading-relaxed text-dim marker:text-rule">
                   {p.highlights.map((h) => (

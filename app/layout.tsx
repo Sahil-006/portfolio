@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     siteName: site.name,
     type: "website",
   },
-  twitter: { card: "summary", title: `${site.name} — ${site.title}`, description: site.tagline },
+  twitter: { card: "summary_large_image", title: `${site.name} — ${site.title}`, description: site.tagline },
 };
 
 export const viewport: Viewport = { themeColor: "#0f131a" };
@@ -35,7 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
         <Header />
-        <main id="main" className="mx-auto w-full max-w-3xl flex-1 px-5 sm:px-8">
+        <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-5 sm:px-8">
           {children}
         </main>
         <Footer />

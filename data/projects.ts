@@ -5,8 +5,16 @@
 // tags: also become the skill orbs in the 3D hero. Shared tags sit between the projects that use them.
 // image: optional screenshot, e.g. "/projects/early-spark.png" (put the file in public/projects/).
 //        When set, the screenshot replaces the number cover.
+// chart: optional small chart drawn from real results, used as the cover when there's no screenshot.
+//   { type: "dots", total, hit, caption }   e.g. 70 of 72 cases caught
+//   { type: "bars", bars: [{ label, value (0–100), display }], caption }
+// team: optional note for group projects, shown under the title.
 // Leave any link as "" to hide its button.
 // ─────────────────────────────────────────────────────────────
+
+export type ProjectChart =
+  | { type: "dots"; total: number; hit: number; caption: string }
+  | { type: "bars"; bars: { label: string; value: number; display: string }[]; caption: string };
 
 export type Project = {
   slug: string;
@@ -19,6 +27,8 @@ export type Project = {
   // Orb colour in the 3D space and the glow on the project's cover.
   hue: string;
   image?: string;
+  chart?: ProjectChart;
+  team?: string;
   links: { live?: string; github?: string; demo?: string };
 };
 
@@ -36,6 +46,7 @@ export const projects: Project[] = [
     ],
     tags: ["PyTorch", "ResNet18", "BiLSTM", "Signal processing", "Python"],
     hue: "#ff6b7a",
+    chart: { type: "dots", total: 72, hit: 70, caption: "Critical cases caught: 70 of 72" },
     links: { github: "" },
   },
   {
@@ -51,6 +62,14 @@ export const projects: Project[] = [
     ],
     tags: ["LightGBM", "Python", "Scapy", "SQLite", "scikit-learn"],
     hue: "#a78bfa",
+    chart: {
+      type: "bars",
+      bars: [
+        { label: "Tested on the same source", value: 99.9994, display: "99.9994%" },
+        { label: "Tested on a new source", value: 0.24, display: "0.24%" },
+      ],
+      caption: "The drop that exposed shortcut learning",
+    },
     links: { github: "" },
   },
   {
@@ -66,6 +85,7 @@ export const projects: Project[] = [
     ],
     tags: ["GraphCodeBERT", "Ollama", "Flask", "Next.js", "Hugging Face"],
     hue: "#5eead4",
+    image: "/projects/codetrust.jpg",
     links: { live: "https://codetrust.vercel.app/", github: "" },
   },
   {
@@ -80,6 +100,8 @@ export const projects: Project[] = [
     ],
     tags: ["RAG", "FAISS", "Mistral-7B", "Next.js", "Hugging Face", "Python"],
     hue: "#fbbf24",
+    chart: { type: "dots", total: 50, hit: 43, caption: "Relevant answers: 43 of 50 test queries" },
+    team: "Team project. I was a contributor.",
     links: { github: "https://github.com/shaiiiikh-github/Intelli-Help" },
   },
   {
@@ -95,6 +117,7 @@ export const projects: Project[] = [
     ],
     tags: ["CNN", "scikit-learn", "Flask", "MongoDB", "ESP32"],
     hue: "#86efac",
+    image: "/projects/smart-agro.jpg",
     links: { live: "https://smart-agro-v2.vercel.app/", github: "" },
   },
 ];
