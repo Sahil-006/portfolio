@@ -11,7 +11,7 @@ export const site = {
   location: "Petlad, Gujarat, India",
   // Short line shown next to the green dot in the hero. "" to hide.
   status: "Open to AI/ML and backend roles",
-  url: "https://example.com", // ← change to your domain after deploying
+  url: "https://sahil-shaikh-ai.vercel.app", // ← change to your domain after deploying
 
   // Put a square photo at public/me.jpg and set this to "/me.jpg". "" shows your initials.
   photo: "",
