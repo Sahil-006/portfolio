@@ -192,7 +192,7 @@ export default function Teardown() {
 
         {/* 3D laptop: right side on desktop, top part on phones */}
         <div
-          className="absolute inset-x-0 top-0 h-[42%] transition-opacity duration-300 lg:inset-0 lg:h-full"
+          className="absolute inset-x-0 top-0 h-[60%] transition-opacity duration-300 lg:inset-0 lg:h-full"
           style={{ opacity: fading ? 0 : 1 }}
         >
           {webgl && (
@@ -236,8 +236,6 @@ export default function Teardown() {
                     </span>
                   ))}
               </div>
-              {/* Soft fade where the 3D area meets the text on phones */}
-              <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-ground to-transparent lg:hidden" />
             </>
           )}
         </div>
@@ -265,8 +263,10 @@ export default function Teardown() {
         </nav>
 
         {/* Chapter text: left on desktop, bottom on phones */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 top-[42%] lg:inset-0 lg:top-0">
-          <div className="mx-auto flex h-full w-full max-w-6xl items-start px-5 pb-24 pt-1 sm:px-8 lg:items-center lg:pb-0 lg:pt-0">
+        {/* On phones the text sits in a glass bottom card that slightly overlaps the 3D area,
+            so the laptop can use more of the screen. On desktop it's a column on the left. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 top-[53%] rounded-t-3xl border-t border-white/10 bg-[#11161f]/90 backdrop-blur-md lg:inset-0 lg:top-0 lg:rounded-none lg:border-0 lg:bg-transparent lg:backdrop-blur-none">
+          <div className="mx-auto flex h-full w-full max-w-6xl items-start px-5 pb-24 pt-5 sm:px-8 lg:items-center lg:pb-0 lg:pt-0">
             <div className="pointer-events-auto w-full lg:max-w-[440px]">
               {/* Panels crossfade in place (both sit in the same grid cell), so there's no wait between them. */}
               <div className="grid">
@@ -367,14 +367,14 @@ function ChapterPanel({
             )}
           </div>
           <h1
-            className="mt-4 text-[clamp(2.6rem,9vw,5.25rem)] font-bold leading-[0.92] tracking-[-0.035em] text-ink"
+            className="mt-3 text-[clamp(2.4rem,9vw,5.25rem)] font-bold leading-[0.92] tracking-[-0.035em] text-ink lg:mt-4"
             style={{ fontVariationSettings: '"wdth" 78' }}
           >
             {site.name}
           </h1>
-          <p className="mt-3 text-lg text-ink">{site.title}</p>
-          <p className="mt-1 max-w-[36ch] leading-relaxed text-dim sm:text-lg">{site.tagline}</p>
-          <div className="mt-5 flex flex-wrap gap-2">
+          <p className="mt-2 text-ink lg:mt-3 lg:text-lg">{site.title}</p>
+          <p className="mt-1 max-w-[36ch] text-sm leading-relaxed text-dim sm:text-base lg:text-lg">{site.tagline}</p>
+          <div className="mt-4 flex flex-wrap gap-2 lg:mt-5">
             <CopyEmail primary />
             {site.resumes.map((r) => (
               <LinkButton key={r.href} href={r.href}>
@@ -415,7 +415,7 @@ function ChapterPanel({
       return (
         <div>
           {heading}
-          <p className="mt-2 text-sm text-dim">Every key is one of my skills, coloured by group. Press one.</p>
+          <p className="mt-2 hidden text-sm text-dim sm:block">Every key is one of my skills, coloured by group. Press one.</p>
           <dl className="mt-3 space-y-2 lg:mt-4 lg:space-y-3">
             {site.stack.map((g, gi) => {
               const color = groupColors[gi % groupColors.length];

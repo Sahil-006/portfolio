@@ -6,7 +6,7 @@ import "@fontsource/ibm-plex-mono/600.css";
 import "@fontsource/ibm-plex-mono/700.css";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Edges, Environment, Lightformer, Line, PerformanceMonitor, RoundedBox } from "@react-three/drei";
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { site } from "@/data/site";
 import { projects } from "@/data/projects";
@@ -80,10 +80,17 @@ const H_LID = 2.15;
 
 // Camera shots. Close-ups keep roughly the overview's viewing angle, just nearer.
 const OVERVIEW = { pos: new THREE.Vector3(0, 3.6, 10.5), look: new THREE.Vector3(0, 0.2, 0) };
+// Phones get their own camera: a wider lens and a closer overview, so the laptop fills the
+// tall, narrow frame and the close-ups really feel close.
+const PHONE_FOV = 38;
+const OVERVIEW_PHONE = { pos: new THREE.Vector3(0, 3.0, 8.4), look: new THREE.Vector3(0, 0.35, 0) };
+
+// True on phones and small screens: lets parts skip extras that don't show at that size.
+const CompactCtx = createContext(false);
 const CLOSE_FLAT = new THREE.Vector3(0, 2.95, 5.7); // looking down at a flat layer
 const CLOSE_LID = new THREE.Vector3(0, 0.85, 6.3); // facing the screen
 
-export default function Laptop(props: LaptopProps) {
+function LaptopCanvas(props: LaptopProps) {
   const wrap = useRef<HTMLDivElement>(null);
   const [quality, setQuality] = useState<Quality>(() => initialQuality(props.compact));
   const [onScreen, setOnScreen] = useState(true);
@@ -133,12 +140,16 @@ export default function Laptop(props: LaptopProps) {
     >
       {fontsReady && (
         <Canvas
-          camera={{ position: [0, 3.6, props.compact ? 11.5 : 10.5], fov: 32 }}
+          camera={{
+            position: props.compact ? OVERVIEW_PHONE.pos.toArray() : OVERVIEW.pos.toArray(),
+            fov: props.compact ? PHONE_FOV : 32,
+          }}
           // Full frame rate and a fixed, sharp resolution on every device. (A resolution that dipped
           // while moving caused a visible blur-then-sharpen flicker, so it's gone.)
           dpr={quality === "high" ? [1, 2] : [1, 1.75]}
           frameloop={!onScreen || !tabVisible ? "never" : "always"}
-          gl={{ antialias: true, alpha: true, powerPreference: "high-performance", stencil: false }}
+          // Edge smoothing (antialias) is costly on phones and barely visible on their dense screens.
+          gl={{ antialias: quality === "high", alpha: true, powerPreference: "high-performance", stencil: false }}
           fallback={null}
         >
           <PerformanceMonitor flipflops={1} onDecline={() => !forcedQuality() && setQuality("low")} />
@@ -169,6 +180,11 @@ function useDisposable<T>(create: () => T, deps: React.DependencyList): T {
   useEffect(() => () => disposeAll(value), [value]);
   return value;
 }
+
+// Memoised: the page re-renders when the chapter changes, but nothing the 3D scene needs has
+// changed, so React shouldn't walk the whole 3D tree again (that caused a hitch at each chapter).
+const Laptop = memo(LaptopCanvas);
+export default Laptop;
 
 function pointer(on: boolean) {
   document.body.style.cursor = on ? "pointer" : "";
@@ -234,18 +250,18 @@ function Scene({
         const w = Math.max(0, 1 - Math.abs(cf - (i + 0.5)));
         if (w <= 0) return;
         const subject = c.layer ? anchors.current[`subject:${c.layer}`] : null;
+        // (phones: centred close-ups, no sideways offset; desktop: part kept clear of the text)
         if (subject && story.current.e > 0.05) {
           subject.getWorldPosition(v.s);
           // On desktop the text panel is on the left, so aim a little left of the part to keep it on the right.
           v.sl.copy(v.s).add(tmp.set(compact ? 0 : c.layer === "lid" ? -0.75 : -1.05, 0, 0));
           v.sp
             .copy(c.layer === "lid" ? CLOSE_LID : CLOSE_FLAT)
-            .multiplyScalar(compact ? 1.4 : 1)
+            .multiplyScalar(compact ? 0.92 : 1)
             .add(v.sl);
         } else {
-          v.sp.copy(OVERVIEW.pos);
-          if (compact) v.sp.z += 1;
-          v.sl.copy(OVERVIEW.look);
+          v.sp.copy(compact ? OVERVIEW_PHONE.pos : OVERVIEW.pos);
+          v.sl.copy(compact ? OVERVIEW_PHONE.look : OVERVIEW.look);
         }
         v.pos.addScaledVector(v.sp, w);
         v.look.addScaledVector(v.sl, w);
@@ -310,6 +326,7 @@ function Scene({
   return (
     <StoryCtx.Provider value={story}>
     <AnchorCtx.Provider value={anchors}>
+    <CompactCtx.Provider value={compact}>
       {/* A solid background (same colour as the page) so the glass parts blend inside the scene.
           Against the see-through canvas they darkened the page behind them instead. */}
       <color attach="background" args={["#0f131a"]} />
@@ -318,15 +335,20 @@ function Scene({
       {/* Rim light from behind: makes the clear edges glow against the dark background. */}
       <pointLight position={[0, 4, -6]} intensity={70} color="#bcd4ff" />
       <directionalLight position={[3, 7, 5]} intensity={2.3} color="#f3f6ff" />
-      <pointLight position={[-5, 3, -3]} intensity={30} color="#8ab4ff" />
-      <pointLight position={[5, -2, 4]} intensity={12} color="#ffd9b0" />
+      {!compact && (
+        <>
+          <pointLight position={[-5, 3, -3]} intensity={30} color="#8ab4ff" />
+          <pointLight position={[5, -2, 4]} intensity={12} color="#ffd9b0" />
+        </>
+      )}
+      <Warmup />
       <Environment resolution={128} frames={1}>
         <Lightformer form="rect" intensity={3} position={[0, 6, 3]} scale={[9, 1.5, 1]} color="#ffffff" />
         <Lightformer form="rect" intensity={1.5} position={[-6, 1, 2]} rotation-y={Math.PI / 2} scale={[6, 2, 1]} color="#cfe0ff" />
         <Lightformer form="rect" intensity={1.1} position={[6, 0, 1]} rotation-y={-Math.PI / 2} scale={[6, 2, 1]} color="#ffe2c4" />
       </Environment>
 
-      <group ref={frame} position={compact ? [0, 0.2, 0] : [1.75, -0.05, 0]} scale={compact ? 0.78 : 0.92}>
+      <group ref={frame} position={compact ? [0, 0.05, 0] : [1.75, -0.05, 0]} scale={compact ? 1.0 : 0.92}>
         <mesh ref={shadow} position={[0, -1.55, 0]} rotation-x={-Math.PI / 2}>
           <planeGeometry args={[W * 1.5, D * 1.4]} />
           <meshBasicMaterial map={shadowTex} color="#000000" transparent opacity={0.5} depthWrite={false} />
@@ -358,9 +380,23 @@ function Scene({
           <LeftoverScrew />
         </group>
       </group>
+    </CompactCtx.Provider>
     </AnchorCtx.Provider>
     </StoryCtx.Provider>
   );
+}
+
+/**
+ * Prepares every shader on the GPU right after the scene appears, instead of the first time
+ * something becomes visible mid-scroll (which shows up as a stutter).
+ */
+function Warmup() {
+  const { gl, scene, camera } = useThree();
+  useEffect(() => {
+    const id = requestAnimationFrame(() => gl.compile(scene, camera));
+    return () => cancelAnimationFrame(id);
+  }, [gl, scene, camera]);
+  return null;
 }
 
 /** Soft blue glow behind the laptop. Follows the camera's direction so it always sits behind the subject. */
@@ -401,6 +437,7 @@ function Layer({
 }) {
   const story = useContext(StoryCtx);
   const anchors = useContext(AnchorCtx);
+  const compact = useContext(CompactCtx);
   const ref = useRef<THREE.Group>(null);
   const lineRef = useRef<{ material: THREE.Material & { opacity: number } } | null>(null);
   const cfg = LAYERS[id];
@@ -442,7 +479,7 @@ function Layer({
           }}
         />
       )}
-      {pts && (
+      {pts && !compact && (
         <Line
           // @ts-expect-error drei's Line ref type is loose; we only touch material.opacity
           ref={lineRef}
@@ -880,6 +917,11 @@ function Lid({ quality, reducedMotion }: { quality: Quality; reducedMotion: bool
   const lastChapter = useRef(-1);
   const seenBoot = useRef(0);
   const textures = useDisposable(() => chapters.map((c) => screenTexture(c.screen)), []);
+  const gl = useThree((st) => st.gl);
+  // Upload every chapter's screen image to the GPU now, not when it first appears mid-scroll.
+  useEffect(() => {
+    textures.forEach((t) => gl.initTexture(t));
+  }, [gl, textures]);
   const note = useDisposable(() => noteTexture(["it worked on", "my machine,", "I promise."]), []);
   const cfg = LAYERS.lid;
   const H = H_LID;
@@ -902,8 +944,8 @@ function Lid({ quality, reducedMotion }: { quality: Quality; reducedMotion: bool
     const ch = Math.min(chapters.length - 1, Math.max(0, Math.floor(s.cf)));
     if (ch !== lastChapter.current && screenMat.current) {
       lastChapter.current = ch;
+      // Swapping one texture for another needs no material rebuild (needsUpdate would recompile).
       screenMat.current.map = textures[ch];
-      screenMat.current.needsUpdate = true;
     }
   });
 
