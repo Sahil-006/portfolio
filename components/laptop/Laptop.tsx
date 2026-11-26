@@ -37,6 +37,7 @@ export type LaptopProps = {
   onSelect: (slug: string | null) => void;
   onKey: (group: number) => void;
   labels: React.RefObject<Record<string, HTMLElement | null>>;
+  reboot: React.RefObject<number>; // bump to snap back to the start and replay the lid opening
 };
 
 const W = 3.4; // width (x)
@@ -68,8 +69,8 @@ function initialQuality(compact: boolean): Quality {
 }
 
 // Shared per-frame state: how exploded the laptop is and where we are in the story.
-type Story = { cf: number; e: number };
-const StoryCtx = createContext<React.RefObject<Story>>({ current: { cf: 0, e: 0 } });
+type Story = { cf: number; e: number; boot: number };
+const StoryCtx = createContext<React.RefObject<Story>>({ current: { cf: 0, e: 0, boot: 0 } });
 
 // Named points on the laptop: "subject:<layer>" is what the camera frames in that chapter,
 // "tag:<layer>" is where the layer's label sits.
@@ -133,13 +134,14 @@ export default function Laptop(props: LaptopProps) {
       {fontsReady && (
         <Canvas
           camera={{ position: [0, 3.6, props.compact ? 11.5 : 10.5], fov: 32 }}
-          dpr={[1, 2]}
-          frameloop={!onScreen || !tabVisible ? "never" : quality === "low" ? "demand" : "always"}
+          // Full frame rate and a fixed, sharp resolution on every device. (A resolution that dipped
+          // while moving caused a visible blur-then-sharpen flicker, so it's gone.)
+          dpr={quality === "high" ? [1, 2] : [1, 1.75]}
+          frameloop={!onScreen || !tabVisible ? "never" : "always"}
           gl={{ antialias: true, alpha: true, powerPreference: "high-performance", stencil: false }}
           fallback={null}
         >
           <PerformanceMonitor flipflops={1} onDecline={() => !forcedQuality() && setQuality("low")} />
-          {quality === "low" && onScreen && tabVisible && <Throttle fps={30} />}
           <Scene {...props} quality={quality} drag={drag} />
         </Canvas>
       )}
@@ -147,22 +149,25 @@ export default function Laptop(props: LaptopProps) {
   );
 }
 
-function Throttle({ fps }: { fps: number }) {
-  const invalidate = useThree((s) => s.invalidate);
-  useEffect(() => {
-    let raf = 0;
-    let last = 0;
-    const loop = (now: number) => {
-      if (now - last >= 1000 / fps - 2) {
-        last = now;
-        invalidate();
-      }
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, [fps, invalidate]);
-  return null;
+/** Frees GPU memory held by a texture/geometry (or an array/object of them). */
+function disposeAll(value: unknown) {
+  if (!value) return;
+  if (Array.isArray(value)) return value.forEach(disposeAll);
+  const v = value as { dispose?: () => void };
+  if (typeof v.dispose === "function") return v.dispose();
+  if (typeof value === "object") Object.values(value as Record<string, unknown>).forEach(disposeAll);
+}
+
+/**
+ * Like useMemo, for textures and geometries we create ourselves: they're freed from the GPU
+ * when the component unmounts (e.g. when you leave the home page). Without this, every visit
+ * to the home page left ~25 MB of old textures behind.
+ */
+function useDisposable<T>(create: () => T, deps: React.DependencyList): T {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const value = useMemo(create, deps);
+  useEffect(() => () => disposeAll(value), [value]);
+  return value;
 }
 
 function pointer(on: boolean) {
@@ -177,14 +182,17 @@ function Scene({
   onSelect,
   onKey,
   labels,
+  reboot,
   quality,
   drag,
 }: LaptopProps & { quality: Quality; drag: React.RefObject<{ down: boolean; moved: number; rotY: number }> }) {
-  const story = useRef<Story>({ cf: 0, e: 0 });
+  const story = useRef<Story>({ cf: 0, e: 0, boot: 0 });
+  const seenReboot = useRef(reboot.current ?? 0);
+  const lastStyle = useRef<Record<string, string>>({});
   const root = useRef<THREE.Group>(null);
   const frame = useRef<THREE.Group>(null);
   const shadow = useRef<THREE.Mesh>(null);
-  const shadowTex = useMemo(radialTexture, []);
+  const shadowTex = useDisposable(radialTexture, []);
   const anchors = useRef<Record<string, THREE.Object3D | null>>({});
   const [hover, setHover] = useState<string | null>(null);
   const tmp = useMemo(() => new THREE.Vector3(), []);
@@ -199,7 +207,13 @@ function Scene({
     const dt = Math.min(rawDt, 1 / 30);
     // Ease towards the scroll position so the motion stays smooth between scroll events.
     const target = progress.current ?? 0;
-    story.current.cf = THREE.MathUtils.damp(story.current.cf, target, compact ? 14 : 9, dt);
+    // "Take it apart again": jump straight back to the start and replay the lid opening.
+    if ((reboot.current ?? 0) !== seenReboot.current) {
+      seenReboot.current = reboot.current ?? 0;
+      story.current.cf = target;
+      story.current.boot += 1;
+    }
+    story.current.cf = THREE.MathUtils.damp(story.current.cf, target, compact ? 10 : 8, dt);
     story.current.e = explodeAt(story.current.cf);
 
     // The exploded stack is taller, so shrink and lower it a little to keep it all in view.
@@ -264,7 +278,15 @@ function Scene({
       m.opacity = 0.5 - story.current.e * 0.25;
     }
 
-    // Labels over hovered/selected chips.
+    // Labels over chips and layers. Only touch the page when a value actually changes:
+    // writing styles every frame makes the browser redo work 60 times a second.
+    const write = (id: string, el: HTMLElement, transform: string, opacity: string) => {
+      const key = transform + opacity;
+      if (lastStyle.current[id] === key) return;
+      lastStyle.current[id] = key;
+      el.style.transform = transform;
+      el.style.opacity = opacity;
+    };
     const els = labels.current;
     if (els) {
       for (const [id, obj] of Object.entries(anchors.current)) {
@@ -277,11 +299,9 @@ function Scene({
           // Layer tags hang just below the front edge of the layer and show while it's in focus.
           const layer = id.slice(4) as LayerId;
           const f = focusAt(story.current.cf, layer) * story.current.e;
-          el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%, 10px)`;
-          el.style.opacity = f > 0.45 ? "1" : "0";
+          write(id, el, `translate3d(${x.toFixed(0)}px, ${y.toFixed(0)}px, 0) translate(-50%, 10px)`, f > 0.45 ? "1" : "0");
         } else {
-          el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%, -100%)`;
-          el.style.opacity = hover === id || selected === id ? "1" : "0";
+          write(id, el, `translate3d(${x.toFixed(0)}px, ${y.toFixed(0)}px, 0) translate(-50%, -100%)`, hover === id || selected === id ? "1" : "0");
         }
       }
     }
@@ -346,7 +366,7 @@ function Scene({
 /** Soft blue glow behind the laptop. Follows the camera's direction so it always sits behind the subject. */
 function Backlight() {
   const ref = useRef<THREE.Mesh>(null);
-  const tex = useMemo(radialTexture, []);
+  const tex = useDisposable(radialTexture, []);
   const camera = useThree((s) => s.camera);
   const dir = useMemo(() => new THREE.Vector3(), []);
   useFrame(() => {
@@ -488,7 +508,7 @@ function BottomCase({ quality }: { quality: Quality }) {
 function Battery() {
   const story = useContext(StoryCtx);
   const exp = site.experience[0];
-  const tex = useMemo(
+  const tex = useDisposable(
     () => batteryTexture([exp ? "INTERNSHIP" : "BATTERY", exp?.org.toUpperCase().slice(0, 34) ?? "", exp?.period ?? ""]),
     [exp],
   );
@@ -545,7 +565,7 @@ function Board({
   onChip: (slug: string) => void;
   reducedMotion: boolean;
 }) {
-  const tex = useMemo(pcbTexture, []);
+  const tex = useDisposable(pcbTexture, []);
   const list = projects.slice(0, 5);
   return (
     <group>
@@ -599,7 +619,7 @@ function Chip({
   const d = 0.42;
   const lift = useRef<THREE.Group>(null);
   const led = useRef<THREE.MeshStandardMaterial>(null);
-  const tex = useMemo(() => chipTexture(name, metric), [name, metric]);
+  const tex = useDisposable(() => chipTexture(name, metric), [name, metric]);
   useFrame((_, dt) => {
     if (lift.current) lift.current.position.y = THREE.MathUtils.damp(lift.current.position.y, active ? 0.12 : 0, 10, dt);
     if (led.current) led.current.emissiveIntensity = THREE.MathUtils.damp(led.current.emissiveIntensity, active ? 4 : 1.6, 8, dt);
@@ -666,7 +686,7 @@ function Fan({ reducedMotion }: { reducedMotion: boolean }) {
 function Ram() {
   const years = useMemo(btechYears, []);
   const n = years.length;
-  const textures = useMemo(() => years.map((y) => ramTexture(`YEAR ${y.n}`, y.current ? "NOW" : y.range, y.current)), [years]);
+  const textures = useDisposable(() => years.map((y) => ramTexture(`YEAR ${y.n}`, y.current ? "NOW" : y.range, y.current)), [years]);
   return (
     <group position={[0, 0, 0.5]}>
       {years.map((y, i) => {
@@ -767,7 +787,7 @@ function KeyCaps({
   const scl = useMemo(() => new THREE.Vector3(), []);
   const quat = useMemo(() => new THREE.Quaternion(), []);
 
-  const { texture, labels } = useMemo(() => {
+  const { texture, labels } = useDisposable(() => {
     const atlas = keyAtlas(keys.map((k) => ({ label: k.label, w: k.w, color: groupColors[k.group % groupColors.length] })));
     // One flat quad per key, lying on top of its keycap, facing up.
     const positions = new Float32Array(keys.length * 4 * 3);
@@ -858,8 +878,9 @@ function Lid({ quality, reducedMotion }: { quality: Quality; reducedMotion: bool
   const screenMat = useRef<THREE.MeshBasicMaterial>(null);
   const open = useRef(reducedMotion ? 1 : 0);
   const lastChapter = useRef(-1);
-  const textures = useMemo(() => chapters.map((c) => screenTexture(c.screen)), []);
-  const note = useMemo(() => noteTexture(["it worked on", "my machine,", "I promise."]), []);
+  const seenBoot = useRef(0);
+  const textures = useDisposable(() => chapters.map((c) => screenTexture(c.screen)), []);
+  const note = useDisposable(() => noteTexture(["it worked on", "my machine,", "I promise."]), []);
   const cfg = LAYERS.lid;
   const H = H_LID;
 
@@ -867,7 +888,11 @@ function Lid({ quality, reducedMotion }: { quality: Quality; reducedMotion: bool
     const dt = Math.min(rawDt, 1 / 30);
     const s = story.current;
     if (!hinge.current || !s) return;
-    // The lid swings open once on load.
+    // The lid swings open on load, and again after "Take it apart again".
+    if (s.boot !== seenBoot.current) {
+      seenBoot.current = s.boot;
+      if (!reducedMotion) open.current = 0;
+    }
     open.current = Math.min(1, open.current + dt / 1.4);
     const o = 1 - Math.pow(1 - open.current, 3);
     const f = focusAt(s.cf, "lid") * s.e;

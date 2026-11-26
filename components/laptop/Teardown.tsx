@@ -52,13 +52,16 @@ export default function Teardown() {
   const touch = useMedia("(pointer: coarse)");
   const chapterVh = touch ? CHAPTER_VH_PHONE : CHAPTER_VH;
   const labels = useRef<Record<string, HTMLElement | null>>({});
+  const reboot = useRef(0);
+  const gliding = useRef<number | null>(null); // animation frame id while we're scrolling for the visitor
+  const [fading, setFading] = useState(false);
   const n = chapters.length;
 
   const { scrollYProgress } = useScroll({ target: section, offset: ["start start", "end end"] });
   useMotionValueEvent(scrollYProgress, "change", (v) => {
     // On touch screens, snap one layer per swipe while inside the story, then
     // release the snapping at the last chapter so the rest of the page scrolls freely.
-    if (touch && webgl) {
+    if (touch && webgl && gliding.current === null) {
       document.documentElement.style.scrollSnapType = v < (n - 0.6) / n ? "y mandatory" : "";
     }
     const cf = Math.min(n - 0.001, Math.max(0, v * n));
@@ -79,13 +82,73 @@ export default function Teardown() {
     if (chapters[chapter]?.id !== "projects") setSelected(null);
   }, [chapter]);
 
+  const sectionTop = () => {
+    const el = section.current;
+    return el ? el.getBoundingClientRect().top + window.scrollY : 0;
+  };
+
+  const stopGlide = () => {
+    if (gliding.current !== null) cancelAnimationFrame(gliding.current);
+    gliding.current = null;
+  };
+
+  // Scroll for the visitor with our own timed easing, instead of the browser's quick jump,
+  // so the laptop has time to move through each layer. Any wheel or touch takes over.
+  const glideTo = (top: number) => {
+    stopGlide();
+    const html = document.documentElement;
+    if (reducedMotion) {
+      window.scrollTo({ top, behavior: "instant" as ScrollBehavior });
+      return;
+    }
+    html.style.scrollSnapType = "";
+    const start = window.scrollY;
+    const dist = top - start;
+    const duration = Math.min(2200, 700 + (Math.abs(dist) / window.innerHeight) * 260);
+    const t0 = performance.now();
+    const cancel = () => stopGlide();
+    window.addEventListener("wheel", cancel, { once: true, passive: true });
+    window.addEventListener("touchstart", cancel, { once: true, passive: true });
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / duration);
+      const eased = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+      window.scrollTo({ top: start + dist * eased, behavior: "instant" as ScrollBehavior });
+      if (p < 1 && gliding.current !== null) gliding.current = requestAnimationFrame(step);
+      else {
+        gliding.current = null;
+        window.removeEventListener("wheel", cancel);
+        window.removeEventListener("touchstart", cancel);
+      }
+    };
+    gliding.current = requestAnimationFrame(step);
+  };
+
   const goTo = (i: number) => {
     const el = section.current;
     if (!el) return;
-    const top = el.getBoundingClientRect().top + window.scrollY;
     const chapterPx = (el.offsetHeight - window.innerHeight) / n;
-    window.scrollTo({ top: top + chapterPx * (i + 0.5), behavior: reducedMotion ? "auto" : "smooth" });
+    glideTo(sectionTop() + (i === 0 ? 0 : chapterPx * (i + 0.5)));
   };
+
+  // "Take it apart again": fade the laptop out, jump back to the start, and fade it in
+  // assembled with the lid opening again, like a reboot. Cheap to render, smooth everywhere.
+  const restart = () => {
+    stopGlide();
+    setFading(true);
+    window.setTimeout(
+      () => {
+        document.documentElement.style.scrollSnapType = "";
+        window.scrollTo({ top: sectionTop(), behavior: "instant" as ScrollBehavior });
+        progress.current = 0;
+        reboot.current += 1;
+        setChapter(0);
+        setSelected(null);
+        requestAnimationFrame(() => setFading(false));
+      },
+      reducedMotion ? 0 : 280,
+    );
+  };
+  useEffect(() => () => stopGlide(), []);
 
   // Without WebGL, show the chapters as a plain page.
   if (webgl === false) {
@@ -128,7 +191,10 @@ export default function Teardown() {
         />
 
         {/* 3D laptop: right side on desktop, top part on phones */}
-        <div className="absolute inset-x-0 top-0 h-[42%] lg:inset-0 lg:h-full">
+        <div
+          className="absolute inset-x-0 top-0 h-[42%] transition-opacity duration-300 lg:inset-0 lg:h-full"
+          style={{ opacity: fading ? 0 : 1 }}
+        >
           {webgl && (
             <>
               <Laptop
@@ -139,6 +205,7 @@ export default function Teardown() {
                 onSelect={setSelected}
                 onKey={setKeyGroup}
                 labels={labels}
+                reboot={reboot}
               />
               <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
                 {projects.slice(0, 5).map((p) => (
@@ -216,7 +283,7 @@ export default function Teardown() {
                     index={chapter}
                     onProject={setSelected}
                     keyGroup={keyGroup}
-                    onRestart={() => goTo(0)}
+                    onRestart={restart}
                   />
                 </motion.div>
               </AnimatePresence>
