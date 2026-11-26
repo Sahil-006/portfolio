@@ -83,7 +83,7 @@ const OVERVIEW = { pos: new THREE.Vector3(0, 3.6, 10.5), look: new THREE.Vector3
 // Phones get their own camera: a wider lens and a closer overview, so the laptop fills the
 // tall, narrow frame and the close-ups really feel close.
 const PHONE_FOV = 38;
-const OVERVIEW_PHONE = { pos: new THREE.Vector3(0, 3.0, 8.4), look: new THREE.Vector3(0, 0.35, 0) };
+const OVERVIEW_PHONE = { pos: new THREE.Vector3(0.3, 3.0, 8.8), look: new THREE.Vector3(0.3, 0.35, 0) };
 
 // True on phones and small screens: lets parts skip extras that don't show at that size.
 const CompactCtx = createContext(false);
@@ -149,7 +149,9 @@ function LaptopCanvas(props: LaptopProps) {
           dpr={quality === "high" ? [1, 2] : [1, 1.75]}
           frameloop={!onScreen || !tabVisible ? "never" : "always"}
           // Edge smoothing (antialias) is costly on phones and barely visible on their dense screens.
-          gl={{ antialias: quality === "high", alpha: true, powerPreference: "high-performance", stencil: false }}
+          // alpha: false makes the canvas fully solid (the scene paints its own background). A see-through
+          // canvas lets the page blend through it, which Safari on iPhone renders as speckles.
+          gl={{ antialias: quality === "high", alpha: false, powerPreference: "high-performance", stencil: false }}
           fallback={null}
         >
           <PerformanceMonitor flipflops={1} onDecline={() => !forcedQuality() && setQuality("low")} />
